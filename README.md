@@ -1,6 +1,12 @@
 # tf
 Transfer Function for Linear System
 
+## Last Update: 2023-05-23
+1. tf_mul -> tfalg_mul로 함수이름이 변경되었고, tf_mul은 다른 함수로 추가
+2. tf_sum, tf_mul등에서 계산 후 Root를 찾는 것을 coef_mode를 추가해서, coef_mode=True인 경우, 연산 후 root를 찾는 것을 일부러 뺌(Gradient Descent 계산시간 Low)
+3. 그 외의 Tfalgsys, Tfsys 추가!
+4. Tfalgsys의 역행렬 계산 추가!
+
 ### 순서
 1. cpx.py
 2. tf.py
