@@ -2,20 +2,7 @@ import numpy as np
 import itertools
 import cpx
 
-def tf_mul(tf1,tf2):
-    s=Tfalg()
-    s.setRoots(tf1.getRoots()+tf2.getRoots(),tf1.n_coef*tf2.n_coef)
-    return s
-
-def tf_mul_ls(ls):
-    s=Tfalg()
-    r=[]
-    n=1
-    for tf in ls:
-        n = n * tf.n_coef
-        r += tf.getRoots()
-    s.setRoots(r,n)
-    return s
+###### 2023-05-23 -> Add for f(s)=0 -> 함수이름 변경 tf_mul -> tfalg_mul, tf_mul_ls -> tfalg_mul_ls
 
 def fact(n):
     f=1
@@ -38,6 +25,7 @@ class Tfalg:
     def setRoots(self,roots,n):
         ls=[]
         set_roots=set(roots)
+
         for root in set_roots:
             m=0
             for i in range(len(roots)):
@@ -92,13 +80,14 @@ class Tfalg:
             b += self.coef[n-i]*m[1]
         return [a,b]
 
-    def find_roots(self,step=100000):
+    def find_roots(self,step=200000):
         n=len(self.coef)-1
         ls=[]
-        if n==1:
+        if n==0:    ############### ADD -> For "f(s)=0"
+            return ls
+        elif n==1:
             x=tuple(np.around(np.array([-self.coef[-1]/self.coef[0],0]),4))
             ls.append(x)
-            #print(ls)
             return ls
         elif n==2:
             a=self.coef[0]
@@ -110,14 +99,13 @@ class Tfalg:
                 ls.append(x1)
                 ls.append(x2)
             else:
-                x1=tuple(np.around(np.array([(-b)/(2*a),np.sqrt(4*a*c-b*b)/(2*a)]),4))
-                x2=tuple(np.around(np.array([(-b)/(2*a),-np.sqrt(4*a*c-b*b)/(2*a)]),4))
-                if abs(x1[1])<1e-2:
+                x1=np.around(np.array([(-b)/(2*a),np.sqrt(4*a*c-b*b)/(2*a)]),4)
+                x2=np.around(np.array([(-b)/(2*a),-np.sqrt(4*a*c-b*b)/(2*a)]),4)
+                if abs(x1[1])<1e-3:
                     x1[1]=0
                     x2[1]=0
-                ls.append(x1)
-                ls.append(x2)
-            #print(ls)
+                ls.append(tuple(x1))
+                ls.append(tuple(x2))
             return ls
         else:
             aa=1
@@ -153,7 +141,7 @@ class Tfalg:
                 break
 
         x=list(np.around(np.array(x),4))
-        if abs(x[1])<1e-2:
+        if abs(x[1])<1e-6:
             x[1]=0
         
         new_tf=Tfalg()
@@ -187,19 +175,25 @@ class Tfalg:
         cc=np.around(np.array(self.coef),4)
         t=""
         for i in range(n+1):
-            if i==0:
-                t = t + f"{cc[i]}s^{n-i}"
-            elif i==n:
+            if i==n:
+                if i==0:
+                    t = t + f"{cc[i]}"
+                    continue
                 if cc[i]>=0:
                     t = t + f"+{cc[i]}"
                 else:
                     t = t + f"{cc[i]}"
+            elif i==0:
+                t = t + f"{cc[i]}s^{n-i}"
             else:
                 if cc[i]>=0:
                     t = t + f"+{cc[i]}s^{n-i}"
                 else:
                     t = t + f"{cc[i]}s^{n-i}"
         return t
+
+    def __del__(self):
+        return
 
 class Tf(Tfalg):
     def __init__(self):
@@ -221,6 +215,16 @@ class Tf(Tfalg):
         return self.den.getRoots()
 
     def elim(self):
+
+        ### for f(s)=0/...
+        if self.num.coef==[0]:
+            a=Tfalg()
+            a.setRoots([],0)
+            self.num=a
+            b=Tfalg()
+            b.setRoots([],1)
+            self.den=b
+
         elim_num=[]
         elim_den=[]
         for key1 in self.num.root_dict.keys():
@@ -243,6 +247,11 @@ class Tf(Tfalg):
 
         self.num.setRoots(self.num.getRoots(),self.num.n_coef)
         self.den.setRoots(self.den.getRoots(),self.den.n_coef)
+
+    def calc(self,x):
+        a=self.num.calc(x)
+        b=self.den.calc(x)
+        return cpx.comp_divide(a,b)
 
     def tf_divide(self):
         tf_ls=[]
@@ -343,5 +352,127 @@ class Tf(Tfalg):
         t += self.num.tfalg_print()
         t += " / "
         t += self.den.tfalg_print()
-        print(t)
-        return
+        
+        return t
+    
+
+############ ADD
+
+class Tfalgsys:
+    def __init__(self):
+        self.tfalg_sys=[Tfalg()]
+    
+    def setSize(self,m,n):
+        self.tfalg_sys=[]
+        for _ in range(m):
+            ls=[]
+            for _ in range(n):
+                ls.append(Tfalg())
+            self.tfalg_sys.append(ls)
+
+    def setMat(self,a):
+        self.tfalg_sys=[]
+        m=a.shape[0]
+        n=a.shape[1]
+        for i in range(m):
+            ls=[]
+            for j in range(n):
+                k=Tfalg()
+                k.setRoots([],a[i][j])
+                ls.append(k)
+            self.tfalg_sys.append(ls)
+
+    def crop(self,ls1,ls2):
+        a=Tfalgsys()
+        m=len(ls1)
+        n=len(ls2)
+        if len(self.tfalg_sys[0])<m or len(self.tfalg_sys)<n:
+            print("Tfalgsys(Crop): Size Over")
+            return a
+        a.setSize(m,n)
+        ii=0
+        jj=0
+        for i in ls1:
+            for j in ls2:
+                a.tfalg_sys[ii][jj]=self.tfalg_sys[i][j]
+                jj += 1
+            ii+=1
+            jj=0
+        return a
+
+    def tfalg2tf(self):
+        a=Tfsys()
+        m=len(self.tfalg_sys)
+        n=len(self.tfalg_sys[0])
+        a.setSize(m,n)
+        for i in range(m):
+            for j in range(n):
+                a.tf_sys[i][j].setZeros(self.tfalg_sys[i][j].getRoots(),self.tfalg_sys[i][j].coef[0])
+        return a
+    
+    def setRoots(self):
+        for i in range(len(self.tfalg_sys)):
+            for j in range(len(self.tfalg_sys[0])):
+                self.tfalg_sys[i][j].setRoots(self.tfalg_sys[i][j].find_roots(),self.tfalg_sys[i][j].coef[0])
+
+    def tfalgsys_print(self):
+        for i in range(len(self.tfalg_sys)):
+            if i==0:
+                a="[["
+            else:
+                a=" ["
+            for j in range(len(self.tfalg_sys[0])):
+                a += self.tfalg_sys[i][j].tfalg_print()
+                if j==len(self.tfalg_sys[0])-1:
+                    a += ""
+                else:
+                    a += ", "
+            if i==len(self.tfalg_sys)-1:
+                print(a+"]]")
+            else:
+                print(a+"],")
+
+
+class Tfsys(Tfalgsys):
+    def __init__(self):
+        self.tf_sys=[Tf()]
+    
+    def setSize(self,m,n):
+        self.tf_sys=[]
+        for _ in range(m):
+            ls=[]
+            for _ in range(n):
+                ls.append(Tf())
+            self.tf_sys.append(ls)
+    
+    def setRoots(self,same_roots=False):
+        if same_roots==False:
+            for i in range(len(self.tf_sys)):
+                for j in range(len(self.tf_sys[0])):
+                    self.tf_sys[i][j].setZeros(self.tf_sys[i][j].num.find_roots(),self.tf_sys[i][j].num.coef[0])
+                    self.tf_sys[i][j].setPoles(self.tf_sys[i][j].den.find_roots(),self.tf_sys[i][j].den.coef[0])
+        else:
+            char_eq_roots=self.tf_sys[0][0].den.find_roots()
+            for i in range(len(self.tf_sys)):
+                for j in range(len(self.tf_sys[0])):
+                    self.tf_sys[i][j].setZeros(self.tf_sys[i][j].num.find_roots(),self.tf_sys[i][j].num.coef[0])
+                    self.tf_sys[i][j].setPoles(char_eq_roots,self.tf_sys[i][j].den.coef[0])
+
+    def tfsys_print(self):
+        for i in range(len(self.tf_sys)):
+            if i==0:
+                a="[["
+            else:
+                a=" ["
+            for j in range(len(self.tf_sys[0])):
+                a += self.tf_sys[i][j].tf_print()
+                if j==len(self.tf_sys[0])-1:
+                    a += ""
+                else:
+                    a += ", "
+            if i==len(self.tf_sys)-1:
+                print(a+"]]")
+            else:
+                print(a+"],")
+
+
